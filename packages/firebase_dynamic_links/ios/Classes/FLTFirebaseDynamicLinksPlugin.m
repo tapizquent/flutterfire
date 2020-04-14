@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 #import "FLTFirebaseDynamicLinksPlugin.h"
-#import "UserAgent.h"
 
 #import "Firebase/Firebase.h"
 
@@ -134,7 +133,6 @@ static NSMutableDictionary *getDictionaryFromFlutterError(FlutterError *error) {
 
 - (BOOL)checkForDynamicLink:(NSURL *)url {
   FIRDynamicLink *dynamicLink = [[FIRDynamicLinks dynamicLinks] dynamicLinkFromCustomSchemeURL:url];
-
   if (!dynamicLink) {
     dynamicLink = [[FIRDynamicLinks dynamicLinks] dynamicLinkFromUniversalLinkURL:url];
   }
@@ -153,6 +151,34 @@ static NSMutableDictionary *getDictionaryFromFlutterError(FlutterError *error) {
     return YES;
   }
   return NO;
+}
+
+- (BOOL)onLink:(NSUserActivity *)userActivity {
+  BOOL handled = [[FIRDynamicLinks dynamicLinks]
+      handleUniversalLink:userActivity.webpageURL
+               completion:^(FIRDynamicLink *_Nullable dynamicLink, NSError *_Nullable error) {
+                 if (error) {
+                   FlutterError *flutterError = getFlutterError(error);
+                   [self.channel invokeMethod:@"onLinkError"
+                                    arguments:getDictionaryFromFlutterError(flutterError)];
+                 } else {
+                   NSMutableDictionary *dictionary = getDictionaryFromDynamicLink(dynamicLink);
+                   [self.channel invokeMethod:@"onLinkSuccess" arguments:dictionary];
+                 }
+               }];
+  return handled;
+}
+
+- (BOOL)onInitialLink:(NSUserActivity *)userActivity {
+  BOOL handled = [[FIRDynamicLinks dynamicLinks]
+      handleUniversalLink:userActivity.webpageURL
+               completion:^(FIRDynamicLink *_Nullable dynamicLink, NSError *_Nullable error) {
+                 if (error) {
+                   self.flutterError = getFlutterError(error);
+                 }
+                 self.initialLink = dynamicLink;
+               }];
+  return handled;
 }
 
 - (BOOL)application:(UIApplication *)application
